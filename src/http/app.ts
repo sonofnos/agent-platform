@@ -75,8 +75,12 @@ export function buildApp(pool: pg.Pool, config: Config, container: Container): E
   return app;
 }
 
-export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction): void {
-  // pino-http already logs the error against the request; this only shapes the response body.
+export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
+  // pino-http only logs a generic "5xx happened" note once an error-handling
+  // middleware exists to catch it -- the real cause (which provider, which quota)
+  // has to be logged explicitly here or it's lost.
+  req.log.error({ err }, "request failed");
+
   if (err instanceof TransientLlmError) {
     res.status(503).json({ error: "The LLM provider is temporarily unavailable or rate-limited. Please try again shortly." });
     return;
