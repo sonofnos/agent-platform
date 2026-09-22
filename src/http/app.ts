@@ -1,10 +1,11 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import express, { type Express } from "express";
+import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { pinoHttp } from "pino-http";
 import type pg from "pg";
 import type { Config } from "../config/index.js";
 import type { Container } from "../container.js";
+import { LlmProviderError, TransientLlmError } from "../llm/OpenAiCompatibleLlmClient.js";
 import { getTrace } from "../tracing/Tracer.js";
 import { verifySignature } from "../webhooks/signature.js";
 
@@ -69,5 +70,21 @@ export function buildApp(pool: pg.Pool, config: Config, container: Container): E
     res.status(200).json({ status: "accepted", eventId });
   });
 
+  app.use(errorHandler);
+
   return app;
+}
+
+export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction): void {
+  // pino-http already logs the error against the request; this only shapes the response body.
+  if (err instanceof TransientLlmError) {
+    res.status(503).json({ error: "The LLM provider is temporarily unavailable or rate-limited. Please try again shortly." });
+    return;
+  }
+  if (err instanceof LlmProviderError) {
+    res.status(502).json({ error: "The LLM provider returned an unexpected error." });
+    return;
+  }
+
+  res.status(500).json({ error: "Internal server error." });
 }

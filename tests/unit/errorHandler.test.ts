@@ -1,0 +1,38 @@
+import { describe, expect, it, vi } from "vitest";
+import type { Request, Response } from "express";
+import { errorHandler } from "../../src/http/app.js";
+import { LlmProviderError, TransientLlmError } from "../../src/llm/OpenAiCompatibleLlmClient.js";
+
+function fakeResponse() {
+  const res = { status: vi.fn(), json: vi.fn() } as unknown as Response;
+  (res.status as ReturnType<typeof vi.fn>).mockReturnValue(res);
+  return res;
+}
+
+describe("errorHandler", () => {
+  it("maps a transient LLM error to 503, not a raw 500", () => {
+    const res = fakeResponse();
+
+    errorHandler(new TransientLlmError("rate limited"), {} as Request, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }));
+  });
+
+  it("maps a non-transient LLM provider error to 502", () => {
+    const res = fakeResponse();
+
+    errorHandler(new LlmProviderError("bad request to provider"), {} as Request, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(502);
+  });
+
+  it("falls back to a JSON 500 for anything else, never an unhandled HTML page", () => {
+    const res = fakeResponse();
+
+    errorHandler(new Error("something unrelated"), {} as Request, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }));
+  });
+});
