@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Clinic Agent Demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.3rem; }
+  .note { font-size: 0.85rem; color: #888; margin-bottom: 1.5rem; }
+  #log { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; min-height: 240px; margin-bottom: 1rem; }
+  .msg { margin: 0.5rem 0; }
+  .msg.user { font-weight: 600; }
+  .msg.agent { white-space: pre-wrap; }
+  .meta { font-size: 0.75rem; color: #999; }
+  form { display: flex; gap: 0.5rem; }
+  input[type=text] { flex: 1; padding: 0.6rem; }
+  button { padding: 0.6rem 1rem; }
+  #tenant { width: 100px; }
+</style>
+</head>
+<body>
+<h1>Clinic Front-Desk Agent (demo)</h1>
+<p class="note">
+  Synthetic data only. Ask about hours, cancellations, or say "book me an appointment".
+  Tenant: <input id="tenant" type="text" value="demo" />
+  &middot; <a href="/api/usage" target="_blank">usage</a>
+</p>
+<div id="log"></div>
+<form id="form">
+  <input id="message" type="text" placeholder="Ask a question..." autocomplete="off" />
+  <button type="submit">Send</button>
+</form>
+
+<script>
+  const log = document.getElementById("log");
+  const form = document.getElementById("form");
+  const input = document.getElementById("message");
+  const tenantInput = document.getElementById("tenant");
+
+  function addMessage(role, text, meta) {
+    const div = document.createElement("div");
+    div.className = "msg " + role;
+    div.textContent = (role === "user" ? "You: " : "Agent: ") + text;
+    log.appendChild(div);
+    if (meta) {
+      const metaDiv = document.createElement("div");
+      metaDiv.className = "meta";
+      metaDiv.textContent = meta;
+      log.appendChild(metaDiv);
+    }
+    log.scrollTop = log.scrollHeight;
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const message = input.value.trim();
+    if (!message) return;
+    addMessage("user", message);
+    input.value = "";
+
+    const response = await fetch("/api/agent/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-tenant-id": tenantInput.value || "demo" },
+      body: JSON.stringify({ message }),
+    });
+    const body = await response.json();
+    addMessage("agent", body.reply, `trace ${body.traceId} · $${(body.costUsd ?? 0).toFixed(6)}`);
+  });
+</script>
+</body>
+</html>
