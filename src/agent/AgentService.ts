@@ -58,7 +58,7 @@ export class AgentService {
         return { traceId, reply: result.message.content, costUsd: totalCost };
       }
 
-      messages.push(result.message);
+      messages.push({ ...result.message, toolCalls: result.toolCalls });
 
       for (const toolCall of result.toolCalls) {
         const tool = this.tools.find((t) => t.definition.name === toolCall.name);

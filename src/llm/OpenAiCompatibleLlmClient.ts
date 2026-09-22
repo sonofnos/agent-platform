@@ -1,3 +1,4 @@
+import { retryWithBackoff } from "../common/retryWithBackoff.js";
 import type { ChatCompletionResult, ChatMessage, LlmClient, ToolCall, ToolDefinition } from "./types.js";
 
 /**
@@ -14,33 +15,10 @@ export class OpenAiCompatibleLlmClient implements LlmClient {
   ) {}
 
   async chat(messages: ChatMessage[], tools: ToolDefinition[]): Promise<ChatCompletionResult> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: this.model,
-        messages: messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-          ...(m.toolCallId ? { tool_call_id: m.toolCallId } : {}),
-          ...(m.name ? { name: m.name } : {}),
-        })),
-        tools: tools.map((t) => ({
-          type: "function",
-          function: { name: t.name, description: t.description, parameters: t.parameters },
-        })),
-      }),
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new LlmProviderError(`LLM provider returned ${response.status}: ${body}`);
-    }
-
-    const body = (await response.json()) as OpenAiChatResponse;
+    const body = await retryWithBackoff(
+      () => this.requestChatCompletion(messages, tools),
+      (err) => err instanceof TransientLlmError,
+    );
     const choice = body.choices[0];
     if (!choice) throw new LlmProviderError("LLM provider returned no choices.");
 
@@ -48,6 +26,7 @@ export class OpenAiCompatibleLlmClient implements LlmClient {
       id: tc.id,
       name: tc.function.name,
       arguments: JSON.parse(tc.function.arguments || "{}"),
+      providerExtra: tc.extra_content,
     }));
 
     return {
@@ -60,16 +39,67 @@ export class OpenAiCompatibleLlmClient implements LlmClient {
       model: body.model ?? this.model,
     };
   }
+
+  private async requestChatCompletion(messages: ChatMessage[], tools: ToolDefinition[]): Promise<OpenAiChatResponse> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages: messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+            ...(m.toolCallId ? { tool_call_id: m.toolCallId } : {}),
+            ...(m.name ? { name: m.name } : {}),
+            ...(m.toolCalls && m.toolCalls.length > 0
+              ? {
+                  tool_calls: m.toolCalls.map((tc) => ({
+                    id: tc.id,
+                    type: "function",
+                    function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
+                    ...(tc.providerExtra ? { extra_content: tc.providerExtra } : {}),
+                  })),
+                }
+              : {}),
+          })),
+          tools: tools.map((t) => ({
+            type: "function",
+            function: { name: t.name, description: t.description, parameters: t.parameters },
+          })),
+        }),
+      });
+    } catch (err) {
+      throw new TransientLlmError("The LLM provider could not be reached.");
+    }
+
+    if (!response.ok) {
+      const responseBody = await response.text();
+      if (response.status === 429 || response.status >= 500) {
+        throw new TransientLlmError(`LLM provider returned ${response.status}: ${responseBody}`);
+      }
+      throw new LlmProviderError(`LLM provider returned ${response.status}: ${responseBody}`);
+    }
+
+    return (await response.json()) as OpenAiChatResponse;
+  }
 }
 
 export class LlmProviderError extends Error {}
+
+/** A 429/5xx or network failure -- worth retrying, unlike a real 4xx (bad request, auth, unknown model). */
+export class TransientLlmError extends LlmProviderError {}
 
 interface OpenAiChatResponse {
   model?: string;
   choices: Array<{
     message: {
       content: string | null;
-      tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }>;
+      tool_calls?: Array<{ id: string; function: { name: string; arguments: string }; extra_content?: unknown }>;
     };
   }>;
   usage?: { prompt_tokens: number; completion_tokens: number };
