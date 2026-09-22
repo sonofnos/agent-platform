@@ -15,7 +15,7 @@ export class OpenAiCompatibleEmbeddingClient implements EmbeddingClient {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.apiKey}`,
       },
-      body: JSON.stringify({ model: this.model, input: texts }),
+      body: JSON.stringify({ model: this.model, input: texts, dimensions: this.dimensions }),
     });
 
     if (!response.ok) {
