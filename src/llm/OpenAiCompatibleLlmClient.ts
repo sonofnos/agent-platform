@@ -12,12 +12,14 @@ export class OpenAiCompatibleLlmClient implements LlmClient {
     private readonly baseUrl: string,
     private readonly apiKey: string,
     private readonly model: string,
+    private readonly maxAttempts = 4,
   ) {}
 
   async chat(messages: ChatMessage[], tools: ToolDefinition[]): Promise<ChatCompletionResult> {
     const body = await retryWithBackoff(
       () => this.requestChatCompletion(messages, tools),
       (err) => err instanceof TransientLlmError,
+      this.maxAttempts,
     );
     const choice = body.choices[0];
     if (!choice) throw new LlmProviderError("LLM provider returned no choices.");

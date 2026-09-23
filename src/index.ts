@@ -17,7 +17,7 @@ async function main(): Promise<void> {
 
   const app = buildApp(pool, config, container);
   app.listen(config.port, () => {
-    console.log(`agent-platform listening on :${config.port} (llm base url: ${config.llm.baseUrl ?? "fake/offline"})`);
+    console.log(`agent-platform listening on :${config.port} (llm base url: ${config.llm.baseUrl ?? "fake/offline"}, chat models: ${[config.llm.chatModel, ...config.llm.fallbackChatModels].join(" -> ")})`);
   });
 }
 

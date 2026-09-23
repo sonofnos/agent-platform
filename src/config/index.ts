@@ -5,6 +5,7 @@ export interface Config {
     baseUrl: string | null;
     apiKey: string | null;
     chatModel: string;
+    fallbackChatModels: string[];
     embeddingModel: string;
     embeddingDimensions: number;
   };
@@ -20,6 +21,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
       baseUrl: env.LLM_BASE_URL ?? null,
       apiKey: env.LLM_API_KEY ?? null,
       chatModel: env.LLM_CHAT_MODEL ?? "gpt-4o-mini",
+      fallbackChatModels: (env.LLM_FALLBACK_MODELS ?? "").split(",").map((m) => m.trim()).filter(Boolean),
       embeddingModel: env.LLM_EMBEDDING_MODEL ?? "text-embedding-3-small",
       embeddingDimensions: Number(env.LLM_EMBEDDING_DIMENSIONS ?? 768),
     },

@@ -10,6 +10,7 @@ import { CalendarRepository } from "./appointments/CalendarRepository.js";
 import type { Config } from "./config/index.js";
 import { FakeEmbeddingClient } from "./llm/FakeEmbeddingClient.js";
 import { FakeLlmClient } from "./llm/FakeLlmClient.js";
+import { FallbackLlmClient } from "./llm/FallbackLlmClient.js";
 import { OpenAiCompatibleEmbeddingClient } from "./llm/OpenAiCompatibleEmbeddingClient.js";
 import { OpenAiCompatibleLlmClient } from "./llm/OpenAiCompatibleLlmClient.js";
 import type { EmbeddingClient, LlmClient } from "./llm/types.js";
@@ -29,10 +30,7 @@ export interface Container {
 }
 
 export function buildContainer(pool: pg.Pool, config: Config, overrides?: Partial<Pick<Container, "llm" | "embeddings">>): Container {
-  const llm: LlmClient =
-    overrides?.llm ?? (config.llm.baseUrl && config.llm.apiKey
-      ? new OpenAiCompatibleLlmClient(config.llm.baseUrl, config.llm.apiKey, config.llm.chatModel)
-      : new FakeLlmClient());
+  const llm: LlmClient = overrides?.llm ?? buildChatClient(config);
 
   const embeddings: EmbeddingClient =
     overrides?.embeddings ?? (config.llm.baseUrl && config.llm.apiKey
@@ -55,4 +53,15 @@ export function buildContainer(pool: pg.Pool, config: Config, overrides?: Partia
   const agentService = new AgentService(pool, llm, tools, promptStore, usageTracker);
 
   return { llm, embeddings, knowledgeBase, calendar, appointments, usageTracker, webhookEvents, agentService };
+}
+
+function buildChatClient(config: Config): LlmClient {
+  const { baseUrl, apiKey, chatModel, fallbackChatModels } = config.llm;
+  if (!baseUrl || !apiKey) return new FakeLlmClient();
+
+  const models = [chatModel, ...fallbackChatModels];
+  // With somewhere to fall back to, fail over quickly instead of retrying one overloaded model for long.
+  const attempts = models.length > 1 ? 2 : 4;
+  const clients = models.map((m) => new OpenAiCompatibleLlmClient(baseUrl, apiKey, m, attempts));
+  return clients.length === 1 ? clients[0]! : new FallbackLlmClient(clients);
 }
