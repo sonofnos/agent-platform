@@ -18,7 +18,15 @@ const DEFAULT_SYSTEM_PROMPT =
 export interface AgentRunOptions {
   /** Where the request came from ("chat", "voice"), recorded on the trace. */
   channel?: string;
+  /** Earlier turns of the same conversation (e.g. a phone call), oldest first. */
+  history?: ChatMessage[];
 }
+
+const CHANNEL_INSTRUCTIONS: Record<string, string> = {
+  voice:
+    "This reply will be spoken aloud on a phone call. Use short plain sentences, no markdown, no lists, " +
+    "and never read out IDs or references; say dates and times naturally.",
+};
 
 export interface AgentRunResult {
   traceId: string;
@@ -58,8 +66,10 @@ export class AgentService {
       await tracer.record("prompt_injection_flag", injectionCheck);
     }
 
+    const channelInstruction = CHANNEL_INSTRUCTIONS[options.channel ?? ""];
     const messages: ChatMessage[] = [
-      { role: "system", content: prompt.template },
+      { role: "system", content: channelInstruction ? `${prompt.template}\n\n${channelInstruction}` : prompt.template },
+      ...(options.history ?? []),
       { role: "user", content: userMessage },
     ];
     const toolDefs = tools.map((t) => t.definition);

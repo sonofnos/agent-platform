@@ -8,6 +8,8 @@ import type { Container } from "../container.js";
 import { BudgetExceededError } from "../agent/TenantPolicy.js";
 import { LlmProviderError, TransientLlmError } from "../llm/OpenAiCompatibleLlmClient.js";
 import { getTrace } from "../tracing/Tracer.js";
+import { VoiceCallStore } from "../voice/VoiceCallStore.js";
+import { twilioVoiceRouter } from "../voice/twilioRoutes.js";
 import { verifySignature } from "../webhooks/signature.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -19,6 +21,17 @@ export function buildApp(pool: pg.Pool, config: Config, container: Container): E
   app.use(express.json({ verify: (req, _res, buf) => ((req as { rawBody?: Buffer }).rawBody = buf) }));
 
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
+
+  app.use(
+    "/api/voice/twilio",
+    twilioVoiceRouter({
+      agent: container.agentService,
+      calls: new VoiceCallStore(pool),
+      authToken: config.voice.twilioAuthToken,
+      publicBaseUrl: config.voice.publicBaseUrl,
+      tenantForNumber: (to) => config.voice.numberTenants.get(to) ?? config.voice.defaultTenant,
+    }),
+  );
 
   app.post("/api/agent/chat", async (req, res) => {
     const tenantId = String(req.header("x-tenant-id") ?? "demo");

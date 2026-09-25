@@ -11,6 +11,12 @@ export interface Config {
   };
   voiceWebhookSecret: string;
   defaultMonthlyBudgetUsd: number;
+  voice: {
+    twilioAuthToken: string | null;
+    publicBaseUrl: string | null;
+    numberTenants: Map<string, string>;
+    defaultTenant: string;
+  };
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
@@ -28,5 +34,17 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     },
     voiceWebhookSecret: env.VOICE_WEBHOOK_SECRET ?? "dev-webhook-secret",
     defaultMonthlyBudgetUsd: Number(env.DEFAULT_TENANT_MONTHLY_BUDGET_USD ?? 5),
+    voice: {
+      twilioAuthToken: env.TWILIO_AUTH_TOKEN ?? null,
+      publicBaseUrl: env.PUBLIC_BASE_URL?.replace(/\/$/, "") ?? null,
+      // "+15551234567=clinic-a,+15557654321=clinic-b": which tenant a dialed number belongs to.
+      numberTenants: new Map(
+        (env.VOICE_NUMBER_TENANTS ?? "")
+          .split(",")
+          .map((pair) => pair.split("=").map((x) => x.trim()))
+          .filter((p): p is [string, string] => p.length === 2 && !!p[0] && !!p[1]),
+      ),
+      defaultTenant: env.VOICE_DEFAULT_TENANT ?? "demo",
+    },
   };
 }
