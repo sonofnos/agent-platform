@@ -33,3 +33,27 @@ export function wrapUntrustedContent(label: string, content: string): string {
     "</untrusted_data>",
   ].join("\n");
 }
+
+const SHINGLE_WORDS = 8;
+
+function words(text: string): string[] {
+  return text.toLowerCase().replace(/[^a-z0-9<>_' ]+/g, " ").split(/\s+/).filter(Boolean);
+}
+
+/**
+ * Output-side check, independent of the model: true if the reply reproduces any run
+ * of 8 consecutive words from the system prompt. A prompt instruction not to reveal
+ * the prompt can be talked around; this can't, because it runs on what the model
+ * actually produced.
+ */
+export function leaksSystemPrompt(reply: string, systemPrompt: string): boolean {
+  const promptWords = words(systemPrompt);
+  const shingles = new Set<string>();
+  for (let i = 0; i + SHINGLE_WORDS <= promptWords.length; i++) shingles.add(promptWords.slice(i, i + SHINGLE_WORDS).join(" "));
+
+  const replyWords = words(reply);
+  for (let i = 0; i + SHINGLE_WORDS <= replyWords.length; i++) {
+    if (shingles.has(replyWords.slice(i, i + SHINGLE_WORDS).join(" "))) return true;
+  }
+  return false;
+}
