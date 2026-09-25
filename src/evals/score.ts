@@ -4,6 +4,8 @@ export interface EvalCase {
   message: string;
   /** What the case is checking, shown in reports. */
   intent: string;
+  /** Runs for behaviour that varies between runs; the case passes only if every trial does. Default 1. */
+  trials?: number;
   expect: {
     /** Tools the agent must call at least once. */
     calls?: string[];

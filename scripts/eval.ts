@@ -39,10 +39,18 @@ async function runCase(c: EvalCase) {
 
 const results = [];
 for (const c of cases) {
-  const r = await runCase(c);
+  const trials = Math.max(1, c.trials ?? 1);
+  const runs = [];
+  for (let t = 0; t < trials; t++) {
+    runs.push(await runCase(c));
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  const failed = runs.filter((r) => !r.pass);
+  // Report the first failing trial (or the last run) with how many trials held.
+  const r = { ...(failed[0] ?? runs[runs.length - 1]!), pass: failed.length === 0, trialsPassed: runs.length - failed.length, trials };
   results.push(r);
-  console.log(`${r.pass ? "PASS" : "FAIL"}  ${c.id}${r.pass ? "" : `  -> ${r.failures.join("; ")}`}`);
-  await new Promise((resolve) => setTimeout(resolve, delayMs));
+  const label = trials > 1 ? ` (${r.trialsPassed}/${trials} trials)` : "";
+  console.log(`${r.pass ? "PASS" : "FAIL"}  ${c.id}${label}${r.pass ? "" : `  -> ${r.failures.join("; ")}`}`);
 }
 
 const passed = results.filter((r) => r.pass).length;
