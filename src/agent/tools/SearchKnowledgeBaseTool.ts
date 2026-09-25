@@ -1,9 +1,13 @@
+import { z } from "zod";
 import type { EmbeddingClient } from "../../llm/types.js";
 import type { KnowledgeBaseRepository } from "../../rag/KnowledgeBaseRepository.js";
 import { wrapUntrustedContent } from "../promptInjectionGuard.js";
 import type { AgentTool, ToolExecutionContext } from "./Tool.js";
 
 export class SearchKnowledgeBaseTool implements AgentTool {
+  readonly sideEffect = false;
+  readonly argsSchema = z.object({ query: z.string().trim().min(1).max(500) });
+
   readonly definition = {
     name: "search_knowledge_base",
     description: "Search the clinic's knowledge base (policies, FAQs) for information relevant to a question.",

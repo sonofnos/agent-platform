@@ -58,6 +58,7 @@
         "headerParameters": {
           "parameters": [
             { "name": "x-tenant-id", "value": "={{ $json.tenantId }}" },
+            { "name": "x-timestamp", "value": "={{ $json.timestamp }}" },
             { "name": "x-signature", "value": "={{ $json.signature }}" }
           ]
         },

@@ -100,6 +100,7 @@ describe("agent HTTP API against a real Postgres + pgvector container", () => {
     const response = await request(app)
       .post("/api/webhooks/voice")
       .set("x-tenant-id", "demo")
+      .set("x-timestamp", String(Math.floor(Date.now() / 1000)))
       .set("x-signature", "not-the-right-signature")
       .send({ eventId: "call-1" });
 
@@ -109,10 +110,11 @@ describe("agent HTTP API against a real Postgres + pgvector container", () => {
   it("accepts a correctly signed webhook once and treats a replay as already processed", async () => {
     const payload = { eventId: "call-2" };
     const rawBody = Buffer.from(JSON.stringify(payload));
-    const signature = computeSignature("test-secret", rawBody);
+    const ts = String(Math.floor(Date.now() / 1000));
+    const signature = computeSignature("test-secret", ts, rawBody);
 
-    const first = await request(app).post("/api/webhooks/voice").set("x-tenant-id", "demo").set("x-signature", signature).send(payload);
-    const second = await request(app).post("/api/webhooks/voice").set("x-tenant-id", "demo").set("x-signature", signature).send(payload);
+    const first = await request(app).post("/api/webhooks/voice").set("x-tenant-id", "demo").set("x-timestamp", ts).set("x-signature", signature).send(payload);
+    const second = await request(app).post("/api/webhooks/voice").set("x-tenant-id", "demo").set("x-timestamp", ts).set("x-signature", signature).send(payload);
 
     expect(first.status).toBe(200);
     expect(first.body.status).toBe("accepted");

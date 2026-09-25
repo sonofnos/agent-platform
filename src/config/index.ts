@@ -10,6 +10,7 @@ export interface Config {
     embeddingDimensions: number;
   };
   voiceWebhookSecret: string;
+  defaultMonthlyBudgetUsd: number;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
@@ -26,5 +27,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
       embeddingDimensions: Number(env.LLM_EMBEDDING_DIMENSIONS ?? 768),
     },
     voiceWebhookSecret: env.VOICE_WEBHOOK_SECRET ?? "dev-webhook-secret",
+    defaultMonthlyBudgetUsd: Number(env.DEFAULT_TENANT_MONTHLY_BUDGET_USD ?? 5),
   };
 }

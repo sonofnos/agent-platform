@@ -1,8 +1,16 @@
+import { z } from "zod";
 import type { AppointmentRepository } from "../../appointments/AppointmentRepository.js";
 import type { CalendarRepository } from "../../appointments/CalendarRepository.js";
 import type { AgentTool, ToolExecutionContext } from "./Tool.js";
 
 export class CreateAppointmentTool implements AgentTool {
+  readonly sideEffect = true;
+  readonly argsSchema = z.object({
+    slot_id: z.uuid(),
+    // Opaque references only: no spaces, so a real name or free-text clinical detail cannot be passed through.
+    patient_ref: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+  });
+
   readonly definition = {
     name: "create_appointment",
     description: "Book an appointment for a patient in a specific slot returned by check_availability.",

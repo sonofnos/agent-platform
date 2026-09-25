@@ -1,6 +1,7 @@
 import type pg from "pg";
 import { AgentService } from "./agent/AgentService.js";
 import { PromptStore } from "./agent/PromptStore.js";
+import { TenantPolicy } from "./agent/TenantPolicy.js";
 import { CheckAvailabilityTool } from "./agent/tools/CheckAvailabilityTool.js";
 import { CreateAppointmentTool } from "./agent/tools/CreateAppointmentTool.js";
 import { SearchKnowledgeBaseTool } from "./agent/tools/SearchKnowledgeBaseTool.js";
@@ -27,6 +28,7 @@ export interface Container {
   usageTracker: UsageTracker;
   webhookEvents: WebhookEventStore;
   agentService: AgentService;
+  policy: TenantPolicy;
 }
 
 export function buildContainer(pool: pg.Pool, config: Config, overrides?: Partial<Pick<Container, "llm" | "embeddings">>): Container {
@@ -50,9 +52,10 @@ export function buildContainer(pool: pg.Pool, config: Config, overrides?: Partia
     new CreateAppointmentTool(calendar, appointments),
   ];
 
-  const agentService = new AgentService(pool, llm, tools, promptStore, usageTracker);
+  const policy = new TenantPolicy(pool, config.defaultMonthlyBudgetUsd);
+  const agentService = new AgentService(pool, llm, tools, promptStore, usageTracker, policy);
 
-  return { llm, embeddings, knowledgeBase, calendar, appointments, usageTracker, webhookEvents, agentService };
+  return { llm, embeddings, knowledgeBase, calendar, appointments, usageTracker, webhookEvents, agentService, policy };
 }
 
 function buildChatClient(config: Config): LlmClient {

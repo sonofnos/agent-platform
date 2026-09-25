@@ -1,12 +1,21 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { AgentService } from "../../src/agent/AgentService.js";
 import { PromptStore } from "../../src/agent/PromptStore.js";
+import type { TenantPolicy } from "../../src/agent/TenantPolicy.js";
 import type { AgentTool, ToolExecutionContext } from "../../src/agent/tools/Tool.js";
 import { FakeLlmClient } from "../../src/llm/FakeLlmClient.js";
 import { UsageTracker } from "../../src/usage/UsageTracker.js";
 import { FakePool } from "./FakePool.js";
 
-class StubTool implements AgentTool {
+export const permissivePolicy = {
+  controlsFor: async () => ({ monthlyBudgetUsd: Number.POSITIVE_INFINITY, allowedTools: null }),
+  assertWithinBudget: async () => {},
+} as unknown as TenantPolicy;
+
+export class StubTool implements AgentTool {
+  readonly sideEffect = false;
+  readonly argsSchema = z.record(z.string(), z.unknown());
   public calls: Array<{ context: ToolExecutionContext; args: Record<string, unknown> }> = [];
 
   constructor(
@@ -23,7 +32,7 @@ class StubTool implements AgentTool {
 function buildService(pool: FakePool, llm: FakeLlmClient, tools: AgentTool[]) {
   const promptStore = new PromptStore(pool.asPgPool());
   const usageTracker = new UsageTracker(pool.asPgPool());
-  return new AgentService(pool.asPgPool(), llm, tools, promptStore, usageTracker);
+  return new AgentService(pool.asPgPool(), llm, tools, promptStore, usageTracker, permissivePolicy);
 }
 
 describe("AgentService", () => {

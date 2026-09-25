@@ -1,7 +1,11 @@
+import { z } from "zod";
 import type { CalendarRepository } from "../../appointments/CalendarRepository.js";
 import type { AgentTool, ToolExecutionContext } from "./Tool.js";
 
 export class CheckAvailabilityTool implements AgentTool {
+  readonly sideEffect = false;
+  readonly argsSchema = z.object({});
+
   readonly definition = {
     name: "check_availability",
     description: "List the next available appointment slots for the clinic.",

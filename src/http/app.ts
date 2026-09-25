@@ -5,6 +5,7 @@ import { pinoHttp } from "pino-http";
 import type pg from "pg";
 import type { Config } from "../config/index.js";
 import type { Container } from "../container.js";
+import { BudgetExceededError } from "../agent/TenantPolicy.js";
 import { LlmProviderError, TransientLlmError } from "../llm/OpenAiCompatibleLlmClient.js";
 import { getTrace } from "../tracing/Tracer.js";
 import { verifySignature } from "../webhooks/signature.js";
@@ -45,11 +46,10 @@ export function buildApp(pool: pg.Pool, config: Config, container: Container): E
 
   app.post("/api/webhooks/voice", async (req, res) => {
     const tenantId = String(req.header("x-tenant-id") ?? "demo");
-    const signature = req.header("x-signature");
     const rawBody = (req as unknown as { rawBody: Buffer }).rawBody;
-
-    if (!verifySignature(config.voiceWebhookSecret, rawBody, signature)) {
-      res.status(401).json({ error: "invalid signature" });
+    const check = verifySignature(config.voiceWebhookSecret, rawBody, req.header("x-timestamp"), req.header("x-signature"));
+    if (!check.ok) {
+      res.status(401).json({ error: check.reason === "stale" ? "timestamp outside the replay window" : "invalid signature" });
       return;
     }
 
@@ -81,6 +81,10 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   // has to be logged explicitly here or it's lost.
   req.log.error({ err }, "request failed");
 
+  if (err instanceof BudgetExceededError) {
+    res.status(429).json({ error: "This organisation has reached its monthly AI budget.", spentUsd: err.spentUsd, budgetUsd: err.budgetUsd });
+    return;
+  }
   if (err instanceof TransientLlmError) {
     res.status(503).json({ error: "The LLM provider is temporarily unavailable or rate-limited. Please try again shortly." });
     return;
